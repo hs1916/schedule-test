@@ -33,20 +33,9 @@ public class ScheduleApplication implements CommandLineRunner {
 		SpringApplication.run(ScheduleApplication.class, args);
 	}
 
-//	@Override
-//	public void run(String... args) throws Exception {
-//
-//	}
-
 	@Override
 	public void run(String... args) throws Exception {
 		myTaskScheduler.schedule();
-
 		ScheduleBean scheduleBean = myTaskScheduler.getScheduleBean();
-
 	}
-
-
-
-
 }

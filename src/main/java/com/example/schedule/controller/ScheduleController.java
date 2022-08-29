@@ -4,6 +4,7 @@ import com.example.schedule.MyTaskScheduler;
 import com.example.schedule.ScheduleBean;
 import com.example.schedule.repository.CoffeeRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.quartz.SchedulerFactoryBeanCustomizer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.TaskScheduler;
@@ -16,106 +17,111 @@ import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+
 
 @RestController
-@EnableScheduling
-@EnableConfigurationProperties
 @Slf4j
-public class ScheduleController implements SchedulingConfigurer {
-//public class ScheduleController {
+public class ScheduleController {
 
-    private final MyTaskScheduler myTaskScheduler;
-    private final CoffeeRepository coffeeRepository;
+    @Autowired
+    MyTaskScheduler myTaskScheduler;
 
-    private ScheduledTaskRegistrar taskRegistrar;
+    @Autowired
+    CoffeeRepository coffeeRepository;
 
-    public ScheduleController(MyTaskScheduler myTaskScheduler, CoffeeRepository coffeeRepository) {
-        this.myTaskScheduler = myTaskScheduler;
-        this.coffeeRepository = coffeeRepository;
-    }
+    @Autowired
+    ReplaceJob replaceJob;
 
     @GetMapping("/reload")
     public void schedulingReload() throws Exception {
 
         ScheduleBean scheduleBean = myTaskScheduler.getScheduleBean();
-        ScheduledTaskRegistrar taskRegistrar1 = scheduleBean.getTaskRegistrar();
+        ScheduledTaskRegistrar taskRegistrar = scheduleBean.getTaskRegistrar();
 
-        scheduleBean.makeJob("*/14 * * * * ?", "reload");
-
-        TaskScheduler scheduler = taskRegistrar1.getScheduler();
-
-        taskRegistrar1.setTaskScheduler(scheduler);
-
-        taskRegistrar1.destroy();
-
-        scheduleBean.makeJob("*/14 * * * * ?", "reloadAgain");
-
-
-        ThreadPoolTaskScheduler scheduler11 = new ThreadPoolTaskScheduler();
-        scheduler11.setPoolSize(10);
-        scheduler11.setThreadNamePrefix("ThreadScheduler-");
-        scheduler11.initialize();
-
-        ScheduledExecutorService scheduledExecutor = scheduler11.getScheduledExecutor();
-
-
-        taskRegistrar1.setTaskScheduler(scheduler11);
-
-//        SchedulerFactoryBeanCustomizer
 
         log.info(" scheduling.Reload");
 
-
-    }
-
-
-    @Override
-    public void configureTasks(ScheduledTaskRegistrar taskRegistrar) {
-        this.taskRegistrar = taskRegistrar;
-
-
-
-        String cronExpression = "*/14 * * * * ?";
-        String comment = "Cron Bean Reload";
-
-        log.debug(" Creating Async Task Scheduler");
-
-
-        CronTask task = this.createCronTask(new Runnable() {
-            @Override
-            public void run() {
-                CompletableFuture.supplyAsync(() -> {
-                    log.info(" {} task 1 : supply async", comment);
-                    return coffeeRepository.getPriceByName("latte");
-                });
-            }
-        }, cronExpression);
-
-
-        taskRegistrar.addCronTask(task);
-
-
-        CronTask task2 = this.createCronTask(new Runnable() {
+        CronTask task3 = this.createCronTask(new Runnable() {
             @Override
             public void run() {
                 System.out.println("-------------------------------------------------");
                 CompletableFuture.supplyAsync(() -> {
-                    log.info(" {} task 2 : supply async", comment);
+                    log.info(" {} task 3 : supply async", "additional");
                     return coffeeRepository.getPriceByName("mocha");
                 });
                 System.out.println("-------------------------------------------------");
             }
-        }, cronExpression);
+        }, "*/20 * * * * ?");
 
-        taskRegistrar.addCronTask(task2);
+        taskRegistrar.addCronTask(task3);
+        taskRegistrar.scheduleCronTask(task3);
+
+
+        log.info(" scheduling Reload Ended ");
 
     }
+
+
+    @GetMapping("/destroy")
+    public void destroySchedule() {
+
+
+
+
+        ScheduleBean scheduleBean = myTaskScheduler.getScheduleBean();
+        ScheduledTaskRegistrar taskRegistrar = scheduleBean.getTaskRegistrar();
+
+
+
+        ThreadPoolTaskScheduler taskRegistrarScheduler = (ThreadPoolTaskScheduler) taskRegistrar.getScheduler();
+
+        ScheduledExecutorService scheduledExecutor = taskRegistrarScheduler.getScheduledExecutor();
+
+
+        taskRegistrarScheduler.destroy();
+    }
+
+    @GetMapping("/rerun")
+    public void reRun() {
+
+        System.out.println("ScheduleController.reRun");
+
+        CronTask task1 = replaceJob.makeCronTask("refresh task1", "*/5 * * * * ?");
+        CronTask task2 = replaceJob.makeCronTask("refresh task2", "*/10 * * * * ?");
+        CronTask task3 = replaceJob.makeCronTask("refresh task3", "*/15 * * * * ?");
+
+        List<CronTask> cronTaskList = new ArrayList<>();
+
+        cronTaskList.add(task1);
+        cronTaskList.add(task2);
+        cronTaskList.add(task3);
+
+        ScheduleBean scheduleBean = myTaskScheduler.getScheduleBean();
+        ScheduledTaskRegistrar taskRegistrar = scheduleBean.getTaskRegistrar();
+
+        taskRegistrar.destroy();
+
+        taskRegistrar.setCronTasksList(cronTaskList);
+
+        taskRegistrar.afterPropertiesSet();
+
+        log.info(" ----> Refresh Job Ended");
+
+    }
+
+
+
 
 
     public CronTask createCronTask(Runnable action, String expression) {
+
         return new CronTask(action, new CronTrigger(expression));
     }
+
 
 }
